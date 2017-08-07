@@ -1,4 +1,4 @@
-package teradata.boxing;
+package teradata.extractor;
 
 import java.awt.image.BufferedImage;
 

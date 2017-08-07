@@ -1,4 +1,4 @@
-package teradata.boxing;
+package teradata.extractor;
 
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
@@ -7,11 +7,18 @@ public class CharScanner {
 	
 	private int width, height;
 	private int maxCharAmount;
-	private static int WHITE_SPACE = 28;
-
-	public CharScanner(int maxAmount, int whiteSpace) {
+	private static final int CHAR_DISTANCE = 2;
+	private int backgroundColor = 250;
+	private static final int MINIMAL_PIXEL = 4;
+	private static final int MIN_THRES_WORD = 1;
+	private static final int MINIMAL_WORD_WIDTH = 2;
+	
+	public CharScanner() {
+		maxCharAmount = 128;
+	}
+	
+	public CharScanner(int maxAmount) {
 		maxCharAmount = maxAmount;
-		WHITE_SPACE = whiteSpace;
 	}
 	
 	/**
@@ -50,52 +57,80 @@ public class CharScanner {
 	}
 	
 	private CharData recognizeCharacters(int[] input,int width){
-		int color;
+		int color, threshold=MINIMAL_PIXEL;
 		int height = input.length / width;
 		boolean charPresent=false;
+		int blackPixels = 0;
 		int[][] charCoords = new int[maxCharAmount][2]; // TODO Change to ArrayList
 		int charNum = -1;
-		int whitespace = 0;
-		int wordNum = 0; // TODO Review
+		int[] whitespace = new int[maxCharAmount];
+		int space = 0, wordWidth = 0;
+		int wordNum = 1; // TODO Review
 		int[] wordLoc = new int[16];
 		
 		for(int i=0,row=0,col=0;col<width&charNum<maxCharAmount;i++) //TODO should I restrict it my maxCharAmount
         {
             color = getColorValue(input[col+row*width]);
-            if (color<255) {
+            if (color<backgroundColor) {
+            	blackPixels++;
+            }
+            if (blackPixels == threshold) {
             	// good, column has part of a char TODO maybe set up a threshold based on the amount of pixels there?
-            		if (!charPresent) { // if we haven't found a char previously, start a char and designate its starting position
+            		if (!charPresent & wordWidth >= MINIMAL_WORD_WIDTH) { // if we haven't found a char previously, start a char and designate its starting position
+            			threshold = MIN_THRES_WORD;
             			charNum++;
-            			charCoords[charNum][0] = col-1;
+            			charCoords[charNum][0] = col-1-MINIMAL_WORD_WIDTH;
             			charPresent = true;
-            			System.out.println("Found a beginning of a char at "+(col-1));
-            			if(whitespace>WHITE_SPACE & charNum>0) {
+            			System.out.println("Found a beginning of a char "+charNum+" at "+(col-1)+"x"+row+" color="+color);
+            			/*if(whitespace>WHITE_SPACE & charNum>0) {
             				System.out.println("A new word is char num "+(charNum));
             				wordNum++;
             				wordLoc[wordNum]=charNum;
-            			}
-            			whitespace = 0;
+            			}*/
+            			whitespace[charNum+1]=space;
+            			space = 0;
             		}
+            		wordWidth++;
+            		blackPixels = 0;
             		col++;
             		row=0;
             }
             else {
 	            row++;
 	            if (row == height){
-	            	whitespace++;
+	            	if (charNum>=0) {
+	            		space++;
+	            		blackPixels = 0;
+	            	}
 	                // Whoops, column has no black pixels, this is bad isn't it
-	            		if(charPresent) { // if we had a char previously, designate an end position
-	            		charCoords[charNum][1] = col;
+	            		if(charPresent && space >= CHAR_DISTANCE) { // if we had a char previously, designate an end position
+	            		charCoords[charNum][1] = col-(CHAR_DISTANCE);
 	            		charPresent = false;
-	            		System.out.println("Found an end of a char at "+(col));
+	            		blackPixels = 0;
+	            		System.out.println("Found an end of a char "+charNum+" at "+(col)+"x"+row);
+	            		threshold = MINIMAL_PIXEL;
+	            		wordWidth = 0;
 	            		}
 	            		row = 0;
 	            		col++;
 	            }
             }
         }
+		// We're assuming we only have TWO words right now, first and last name
+		wordLoc[wordNum]= longestWhitespaceIndex(whitespace)-1;
 		CharData mCharData = new CharData(charCoords,charNum,wordNum,wordLoc);
 		return mCharData;
+	}
+	
+	private int longestWhitespaceIndex(int[] whitespace) {
+		int index=0, longest=0;
+		for (int i=0;i<whitespace.length;i++) {
+			if (whitespace[i]>longest) {
+				longest = whitespace[i];
+				index = i;
+			}
+		}
+		return index;
 	}
 	
 	private int[] getChar(int[] input, int x1, int x2) {
@@ -119,6 +154,7 @@ public class CharScanner {
 		int[][] charCoords = new int[maxCharAmount][2];
 		int charNum;
 		int width = input.getWidth();
+		double scaleFactor=0;
 		
 		int[] arrayImage = imageToArray(input);
 		CharData mCharData = recognizeCharacters(arrayImage, width);
@@ -133,18 +169,32 @@ public class CharScanner {
 			int d = charCoords[i][1]-charCoords[i][0]+1;
 			if(d>1) {
 				if(i<wordStart[1]) { // TODO change the cycle to not be restricted to two words only
+					if(i==0) {
+						BufferedImage tmp = new BufferedImage(d,height,BufferedImage.TYPE_BYTE_GRAY);
+						tmp.getRaster().setPixels(0, 0, d, height, getChar(arrayImage,charCoords[i][0],charCoords[i][1]));
+						Character charImg = new Character(tmp,dimension,margins);
+						scaleFactor = charImg.scaleFactor;
+						output.firstName[i] = charImg.image;
+					}
+					else {
+					BufferedImage tmp = new BufferedImage(d,height,BufferedImage.TYPE_BYTE_GRAY);
+					tmp.getRaster().setPixels(0, 0, d, height, getChar(arrayImage,charCoords[i][0],charCoords[i][1]));
+					output.firstName[i] = new Character(tmp,dimension,margins,scaleFactor).image;
+					}
+				}
+				else if(i==wordStart[1]) {
 					BufferedImage tmp = new BufferedImage(d,height,BufferedImage.TYPE_BYTE_GRAY);
 					tmp.getRaster().setPixels(0, 0, d, height, getChar(arrayImage,charCoords[i][0],charCoords[i][1]));
 					Character charImg = new Character(tmp,dimension,margins);
-					output.firstName[i] = charImg.getCharacter();
-					
+					scaleFactor = charImg.scaleFactor;
+					output.lastName[m] = charImg.image;
+					m++;
 				}
 				else
 				{
 					BufferedImage tmp = new BufferedImage(d,height,BufferedImage.TYPE_BYTE_GRAY);
 					tmp.getRaster().setPixels(0, 0, d, height, getChar(arrayImage,charCoords[i][0],charCoords[i][1]));
-					Character charImg = new Character(tmp,dimension,margins);
-					output.lastName[m] = charImg.getCharacter();
+					output.lastName[m] = new Character(tmp,dimension,margins,scaleFactor).image;
 					m++;
 				}
 			}
@@ -156,8 +206,9 @@ public class CharScanner {
 
 		
 	      if (image.getType() == BufferedImage.TYPE_BYTE_GRAY) {
-	            // 
+	            System.out.println("Input is grayscale ");
 	        }else {
+	        		System.out.println("Input isn't grayscale, converting");
 	            image = convertToGray(image);
 	        }
 	      
@@ -167,7 +218,7 @@ public class CharScanner {
 	      final byte[] pixels = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();  
 
 	      int[] result = new int[height*width];
-	      System.out.println("Created an array of "+result.length);
+	      System.out.println("Created an array of "+result.length+" and original was "+pixels.length);
 	      final int pixelLength = 1;
 	         for (int pixel = 0, i = 0; pixel < pixels.length; pixel += pixelLength) {
 	            int argb = 0;

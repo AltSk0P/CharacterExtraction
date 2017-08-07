@@ -1,9 +1,10 @@
-package teradata.boxing;
+package teradata.extractor;
 
 import java.awt.Color;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 
@@ -14,7 +15,11 @@ class Character {
 	private int IMG_WIDTH, IMG_HEIGHT, MARGIN;
 	private int[] sidesPos; //1 - A, 2 - B, 3 - C, 4 - D
 	private Rectangle charBox;
-	private int backgroundColor = 255;
+	private int backgroundColor = 250;
+	private static final int MIN_SIZE = 7;
+	
+	public double scaleFactor=0;
+	public BufferedImage image;
 
 	/**
 	 * Public constructor for Character class
@@ -26,6 +31,15 @@ class Character {
 		input = imageToArray(image);
 		IMG_WIDTH = IMG_HEIGHT = dimension;
 		MARGIN = margins;
+		getCharacter();
+	}
+	
+	public Character(BufferedImage image, int dimension, int margins, double scale) {
+		input = imageToArray(image);
+		IMG_WIDTH = IMG_HEIGHT = dimension;
+		MARGIN = margins;
+		scaleFactor = scale;
+		getCharacter();
 	}
 	
 	public Character(BufferedImage image, int dimension, int margins, int background) {
@@ -33,16 +47,17 @@ class Character {
 		IMG_WIDTH = IMG_HEIGHT = dimension;
 		MARGIN = margins;
 		backgroundColor = background;
+		getCharacter();
 	}
 	
 	/**
 	 * Use this function to center & scale your character and return new image
 	 * @return centered&scaled character image
 	 */
-	public BufferedImage getCharacter() {
+	public void getCharacter() {
 		findSides();
 		boxing();
-		return arrayToImage();
+		image = arrayToImage();
 	}
 	
 	private int[] imageToArray(BufferedImage image) {
@@ -61,7 +76,7 @@ class Character {
 	      final byte[] pixels = ((DataBufferByte) image.getRaster().getDataBuffer()).getData();
 
 	      int[] result = new int[height*width];
-	      System.out.println("Created an array of "+result.length);
+	      //System.out.println("Created an array of "+result.length);
 	      final int pixelLength = 1;
 	         for (int pixel = 0, i = 0; pixel < pixels.length; pixel += pixelLength) {
 	            int argb = 0;
@@ -103,7 +118,7 @@ class Character {
         for(int i=0,row=0,col=0;i<input.length;i++)
         {
             color = getColorValue(input[i]);
-            if(color != backgroundColor) {
+            if(color < backgroundColor) {
                 if (!sidesInit) {
                     sidesPos[0] = row;
                     sidesPos[1] = col;
@@ -135,10 +150,10 @@ class Character {
             }
         }
         
-        System.out.println("Top sides is at y "+sidesPos[0]);
+        /*System.out.println("Top sides is at y "+sidesPos[0]);
         System.out.println("Left sides is at x "+sidesPos[1]);
         System.out.println("Right sides is at x "+sidesPos[2]);
-        System.out.println("Bottom sides is at y "+sidesPos[3]);
+        System.out.println("Bottom sides is at y "+sidesPos[3]);*/
 	}
 	
 	private void boxing() {
@@ -150,8 +165,8 @@ class Character {
 		rectY = sidesPos[0]-1;
 		
 		charBox = new Rectangle(rectX,rectY,boxWidth+3,boxHeight+3);
-        System.out.println("Box created at "+rectX+"x"+rectY+" with width "+boxWidth+" and height "+boxHeight);
-        System.out.println(verifyBoxing());
+        //System.out.println("Box created at "+rectX+"x"+rectY+" with width "+boxWidth+" and height "+boxHeight);
+        verifyBoxing();
 	}
 
 	private boolean verifyBoxing() {
@@ -161,7 +176,7 @@ class Character {
 		for(int i=0,row=0,col=0,b=0;i<input.length;i++)
         {
             color = getColorValue(input[i]);
-            if(color < 255) {//if(color >= bgColor+colorDistance)
+            if(color < backgroundColor) {//if(color >= bgColor+colorDistance)
                 if (!charBox.contains(col, row))
                 {
                 	System.out.println("Pixel at "+col+"x"+row+" isn't boxed");
@@ -183,7 +198,7 @@ class Character {
 		//CharScanner scanner = new CharScanner(4);
 		boxedChar = newChar;
 		//boxedChar = scanner.returnSingleChar(newChar, (int)(charBox.getWidth()));
-		System.out.println("boxedChar length is "+boxedChar.length+" versus original newChar "+newChar.length+" and input "+input.length);
+		//System.out.println("boxedChar length is "+boxedChar.length+" versus original newChar "+newChar.length+" and input "+input.length);
 		return containsAll;
 	}
 	
@@ -207,28 +222,67 @@ class Character {
         
         double aspectRatio = (double) boxHeight / boxWidth;
         //System.out.println("Aspect Ratio is "+aspectRatio);
+        System.out.println("Before transformation. ScaleFactor is "+scaleFactor);
+        int newWidth, newHeight;
+        if (scaleFactor==0) {
+	        if (boxHeight>boxWidth) {
+	        		System.out.println("Restricted by height, char_height="+CHAR_HEIGHT);
+	        		newHeight = CHAR_HEIGHT;
+	        		newWidth = (int) (newHeight / aspectRatio);
+	        		scaleFactor = (double) newHeight / (double) boxHeight;
+	        }
+	        else {
+	        		//System.out.println("Restricted by width");
+	        		newWidth = CHAR_WIDTH;
+	        		newHeight = (int) (newWidth * aspectRatio);
+	        		scaleFactor = (double) newWidth / (double) boxWidth;
+	        }
+	        System.out.println("After transformation. ScaleFactor is "+scaleFactor);
+        }
+        else
+	    {
+	        	if (boxHeight>boxWidth) {
+	        		int scaled = (int) (boxHeight * scaleFactor);
+	        		if (scaled<=CHAR_HEIGHT & scaled>=MIN_SIZE) {
+		        		newHeight = (int) (boxHeight * scaleFactor);
+		        		newWidth = (int) (newHeight / aspectRatio);}
+	        		else
+	        		{
+	        			newHeight = CHAR_HEIGHT;
+		        		newWidth = (int) (newHeight / aspectRatio);
+		        		scaleFactor = (double) newHeight / (double) boxHeight;
+	        		}
+	        }
+	        else {
+	        		int scaled = (int) (boxWidth * scaleFactor);
+	        		if (scaled<=CHAR_WIDTH & scaled>=MIN_SIZE) {
+		        		newWidth = (int) (boxWidth * scaleFactor);
+		        		newHeight = (int) (newWidth * aspectRatio);}
+	        		else
+	        		{
+	        			newWidth = CHAR_WIDTH;
+		        		newHeight = (int) (newWidth * aspectRatio);
+		        		scaleFactor = (double) newWidth / (double) boxWidth;
+	        		}
+	        }
+	        	System.out.println("Scaling by "+scaleFactor+" so the boxHeight"+boxHeight+" becomes "+newHeight+
+	        						"and boxWidth "+boxWidth+" becomes "+newWidth);
+        }
         
-        int newWidth, newHeight; 
-        if (boxHeight>boxWidth) {
-        		//System.out.println("Restricted by height");
-        		newHeight = CHAR_HEIGHT;
-        		newWidth = (int) (newHeight / aspectRatio);
-        }
-        else {
-        		//System.out.println("Restricted by width");
-        		newWidth = CHAR_WIDTH;
-        		newHeight = (int) (newWidth * aspectRatio);
-        }
         
         int xoff = (CHAR_WIDTH - newWidth) / 2;
         int yoff = (CHAR_HEIGHT - newHeight) / 2;
         
-        /*System.out.println("newHeight=" + newHeight +
+        System.out.println("newHeight=" + newHeight +
                 " newWidth=" + newWidth +
                 " x off=" + xoff + 
-                " y off=" + yoff);*/
+                " y off=" + yoff);
+        //BufferedImage newCharImg = resizeCV(charImg,newWidth,newHeight);
 
-        Graphics m = outputImage.createGraphics();
+        Graphics2D m = outputImage.createGraphics();
+        m.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        m.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        //m.drawImage(newCharImg, MARGIN-1+xoff, MARGIN-1+yoff, newCharImg.getWidth(), newCharImg.getHeight(), null);
         m.drawImage(charImg, MARGIN-1+xoff, MARGIN-1+yoff, newWidth, newHeight, null);
         m.dispose();
         

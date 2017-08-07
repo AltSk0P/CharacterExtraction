@@ -36,10 +36,14 @@ public class ImageConverter {
 	    final int pixelLength = 1;
 	       for (int pixel = 0; pixel < pixels.length; pixel += pixelLength) {
 	            sb.append(((int) pixels[pixel] & 0xff)); // black
-	            sb.append(',');
+	            if(pixel==pixels.length-1) {
+	            		sb.append('\n');
+	            		//	System.out.println("Hit the end of the file");
+	            		}
+	            else {
+	            		sb.append(',');
+	            		}
 	         	}
-	    
-	    sb.append('\n');
 	}
 	
 	/**

@@ -8,6 +8,11 @@ import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 
+/**
+ * This class is responsible for normalizing and centering a character image
+ * during the character extraction process
+ * The output image is accessible through calling .image
+ */
 class Character {
 	
 	private int[] input, boxedChar;
@@ -34,19 +39,18 @@ class Character {
 		getCharacter();
 	}
 	
+	/**
+	 * Another public constructor
+	 * @param image Character input
+	 * @param dimension desired output dimension, such as 28 (output image size will be 28x28)
+	 * @param margins margins (margins to put character into)
+	 * @param scale forced scaling factor
+	 */
 	public Character(BufferedImage image, int dimension, int margins, double scale) {
 		input = imageToArray(image);
 		IMG_WIDTH = IMG_HEIGHT = dimension;
 		MARGIN = margins;
 		scaleFactor = scale;
-		getCharacter();
-	}
-	
-	public Character(BufferedImage image, int dimension, int margins, int background) {
-		input = imageToArray(image);
-		IMG_WIDTH = IMG_HEIGHT = dimension;
-		MARGIN = margins;
-		backgroundColor = background;
 		getCharacter();
 	}
 	
@@ -60,6 +64,12 @@ class Character {
 		image = arrayToImage();
 	}
 	
+	/**
+	 * Converting BufferedImage to an int[] array of colors representing grayscale intensity 
+	 * If the image isn't grayscale, convert it to it prior to converting to an array
+	 * @param image processed image
+	 * @return the array
+	 */
 	private int[] imageToArray(BufferedImage image) {
 
 	      if (image.getType() == BufferedImage.TYPE_BYTE_GRAY) {
@@ -88,6 +98,11 @@ class Character {
 	      return result;
 	   }
 	
+	/**
+	 * Add a white frame to the input image. Necessary in case if the character is touching the boundaries of the image
+	 * @param sourceImage
+	 * @return image with a white frame
+	 */
 	public BufferedImage inflateFrame(BufferedImage sourceImage) {
 		int sourceWidth = sourceImage.getWidth();
 		int sourceHeight = sourceImage.getHeight();
@@ -102,6 +117,11 @@ class Character {
         return outputImage;
 	}
 	
+	/**
+	 * Convert Color BufferedImage to Grayscale BufferedImage
+	 * @param biColor input
+	 * @return grayscale biColor
+	 */
 	public static BufferedImage convertToGray(BufferedImage biColor)
 	{
 	    BufferedImage biGray = new BufferedImage(biColor.getWidth(), biColor.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
@@ -109,6 +129,9 @@ class Character {
 	    return biGray;
 	}
 	
+	/**
+	 * Find the topmost, leftmost, rightmost and bottommost pixels of the character to define a boundary box
+	 */
 	private void findSides() {
 		int color;
         boolean sidesInit = false;
@@ -156,6 +179,9 @@ class Character {
         System.out.println("Bottom sides is at y "+sidesPos[3]);*/
 	}
 	
+	/**
+	 * Define a boundary box for extracting the character
+	 */
 	private void boxing() {
 		int rectX, rectY;
 		boxHeight = sidesPos[3]-sidesPos[0];
@@ -169,6 +195,11 @@ class Character {
         verifyBoxing();
 	}
 
+	/**
+	 * Used to make sure that the character was boxed correctly and no pixel was left out
+	 * Was mostly used in debugging
+	 * @return true if all pixels are boxed, false if not
+	 */
 	private boolean verifyBoxing() {
 		int color;
 		boolean containsAll=true;
@@ -202,6 +233,11 @@ class Character {
 		return containsAll;
 	}
 	
+	/**
+	 * Converting the output array back to BufferedImage. The actual new image is built in drawNew() method
+	 * charImg is supplied to it which is essentially the extracted boundary box from the original image
+	 * @return output img
+	 */
 	private BufferedImage arrayToImage() {
 		boxHeight = (int)(charBox.getHeight());
 		boxWidth = boxedChar.length/boxHeight;
@@ -210,6 +246,11 @@ class Character {
 		return drawNew(charImg);
 	}
 
+	/**
+	 * Creates a new image for the output. Resizes and centers the character in it
+	 * @param charImg character image
+	 * @return
+	 */
 	private BufferedImage drawNew(BufferedImage charImg) {
 		BufferedImage outputImage = new BufferedImage(IMG_WIDTH,IMG_HEIGHT,BufferedImage.TYPE_BYTE_GRAY);
 		Graphics2D g = outputImage.createGraphics();
@@ -289,6 +330,11 @@ class Character {
         return outputImage;
 	}
 	
+	/**
+	 * get the first 2 bytes of the color (which will stand for BLUE in RGB or grayscale in Grayscale (lel))
+	 * @param input
+	 * @return 0-255 color value
+	 */
 	private int getColorValue(int input) {
 		return (input>>0)&0xFF;
 	}

@@ -3,18 +3,25 @@ package teradata.extractor;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 
+/**
+ * This class is used in recognizing and extracting characters
+ */
 public class CharScanner {
 	
 	private int width, height;
-	private int maxCharAmount;
+	private int maxCharAmount = 128;
 	private static final int CHAR_DISTANCE = 2;
 	private int backgroundColor = 250;
 	private static final int MINIMAL_PIXEL = 4;
 	private static final int MIN_THRES_WORD = 1;
 	private static final int MINIMAL_WORD_WIDTH = 2;
 	
+	/**
+	 * Public Constructors
+	 * Will allow to allocate memory for either 128 chars (default) or your desired amount
+	 */
 	public CharScanner() {
-		maxCharAmount = 128;
+		
 	}
 	
 	public CharScanner(int maxAmount) {
@@ -56,6 +63,12 @@ public class CharScanner {
 		else {System.out.println("Only one char recognized");return input;}
 	}
 	
+	/**
+	 * Finds positions of characters in a provided int[] array of colors
+	 * @param input int[] array of colors
+	 * @param width of the image
+	 * @return CharData containing Character amount, positions, amount and position of words etc.
+	 */
 	private CharData recognizeCharacters(int[] input,int width){
 		int color, threshold=MINIMAL_PIXEL;
 		int height = input.length / width;
@@ -122,6 +135,11 @@ public class CharScanner {
 		return mCharData;
 	}
 	
+	/**
+	 * Finds the biggest value among the supplied array in order to find the biggest whitespace
+	 * @param whitespace is the int[] of all the found spaces between characters
+	 * @return the biggest whitespace to recognize the whitespace between words
+	 */
 	private int longestWhitespaceIndex(int[] whitespace) {
 		int index=0, longest=0;
 		for (int i=0;i<whitespace.length;i++) {
@@ -133,6 +151,13 @@ public class CharScanner {
 		return index;
 	}
 	
+	/**
+	 * Extracts a character so that it can be processed
+	 * @param input the original int[] image
+	 * @param x1 the beginning of the character
+	 * @param x2 the end of the character
+	 * @return int[] character
+	 */
 	private int[] getChar(int[] input, int x1, int x2) {
 		int[] output = new int[height*(x2-x1+1)];
 		
@@ -150,7 +175,14 @@ public class CharScanner {
 		return output;
 	}
 	
-	public Characters extractCharacters(BufferedImage input,int dimension, int margins) {
+	/**
+	 * Extracts all the characters off a white image
+	 * @param input image
+	 * @param dimension desired output dimension
+	 * @param margins desired margins
+	 * @return Characters class containing BI[] for first and last names
+	 */
+	public Characters extractCharacters(BufferedImage input,int dimension, int margins) throws ExtractionException {
 		int[][] charCoords = new int[maxCharAmount][2];
 		int charNum;
 		int width = input.getWidth();
@@ -165,46 +197,56 @@ public class CharScanner {
 		System.out.println("CharNum "+(charNum)+", where wordStart[0]="+wordStart[0]+" and wordStart[1]="+wordStart[1]);
 		Characters output = new Characters(charNum,wordStart[1]);
 		
-		for (int i=0,m=0; i<charNum+1; i++) { //Cycle through all the characters recognized
-			int d = charCoords[i][1]-charCoords[i][0]+1;
-			if(d>1) {
-				if(i<wordStart[1]) { // TODO change the cycle to not be restricted to two words only
-					if(i==0) {
+		try {
+			for (int i=0,m=0; i<charNum+1; i++) { //Cycle through all the characters recognized
+				int d = charCoords[i][1]-charCoords[i][0]+1;
+				if (d>1) {
+					if(i<wordStart[1]) { // TODO change the cycle to not be restricted to two words only
+						if(i==0) {
+							BufferedImage tmp = new BufferedImage(d,height,BufferedImage.TYPE_BYTE_GRAY);
+							tmp.getRaster().setPixels(0, 0, d, height, getChar(arrayImage,charCoords[i][0],charCoords[i][1]));
+							Character charImg = new Character(tmp,dimension,margins);
+							scaleFactor = charImg.scaleFactor;
+							output.firstName[i] = charImg.image;
+						}
+						else {
+						BufferedImage tmp = new BufferedImage(d,height,BufferedImage.TYPE_BYTE_GRAY);
+						tmp.getRaster().setPixels(0, 0, d, height, getChar(arrayImage,charCoords[i][0],charCoords[i][1]));
+						output.firstName[i] = new Character(tmp,dimension,margins,scaleFactor).image;
+						}
+					}
+					else if(i==wordStart[1]) {
 						BufferedImage tmp = new BufferedImage(d,height,BufferedImage.TYPE_BYTE_GRAY);
 						tmp.getRaster().setPixels(0, 0, d, height, getChar(arrayImage,charCoords[i][0],charCoords[i][1]));
 						Character charImg = new Character(tmp,dimension,margins);
 						scaleFactor = charImg.scaleFactor;
-						output.firstName[i] = charImg.image;
+						output.lastName[m] = charImg.image;
+						m++;
 					}
-					else {
-					BufferedImage tmp = new BufferedImage(d,height,BufferedImage.TYPE_BYTE_GRAY);
-					tmp.getRaster().setPixels(0, 0, d, height, getChar(arrayImage,charCoords[i][0],charCoords[i][1]));
-					output.firstName[i] = new Character(tmp,dimension,margins,scaleFactor).image;
+					else
+					{
+						BufferedImage tmp = new BufferedImage(d,height,BufferedImage.TYPE_BYTE_GRAY);
+						tmp.getRaster().setPixels(0, 0, d, height, getChar(arrayImage,charCoords[i][0],charCoords[i][1]));
+						output.lastName[m] = new Character(tmp,dimension,margins,scaleFactor).image;
+						m++;
 					}
-				}
-				else if(i==wordStart[1]) {
-					BufferedImage tmp = new BufferedImage(d,height,BufferedImage.TYPE_BYTE_GRAY);
-					tmp.getRaster().setPixels(0, 0, d, height, getChar(arrayImage,charCoords[i][0],charCoords[i][1]));
-					Character charImg = new Character(tmp,dimension,margins);
-					scaleFactor = charImg.scaleFactor;
-					output.lastName[m] = charImg.image;
-					m++;
-				}
-				else
-				{
-					BufferedImage tmp = new BufferedImage(d,height,BufferedImage.TYPE_BYTE_GRAY);
-					tmp.getRaster().setPixels(0, 0, d, height, getChar(arrayImage,charCoords[i][0],charCoords[i][1]));
-					output.lastName[m] = new Character(tmp,dimension,margins,scaleFactor).image;
-					m++;
 				}
 			}
+			return output;
 		}
-		return output;
+		catch(ArrayIndexOutOfBoundsException e) {
+			throw new ExtractionException("Extraction error occured");
+		}
 	}
 	
+	/**
+	 * Converting BufferedImage to an int[] array of colors representing grayscale intensity 
+	 * If the image isn't grayscale, convert it to it prior to converting to an array
+	 * @param image processed image
+	 * @return the array
+	 */
 	private int[] imageToArray(BufferedImage image) {
 
-		
 	      if (image.getType() == BufferedImage.TYPE_BYTE_GRAY) {
 	            System.out.println("Input is grayscale ");
 	        }else {
@@ -230,6 +272,11 @@ public class CharScanner {
 	      return result;
 	   }
 	
+	/**
+	 * Convert Color BufferedImage to Grayscale BufferedImage
+	 * @param biColor input
+	 * @return grayscale biColor
+	 */
 	public static BufferedImage convertToGray(BufferedImage biColor)
 	{
 	    BufferedImage biGray = new BufferedImage(biColor.getWidth(), biColor.getHeight(), BufferedImage.TYPE_BYTE_GRAY);
@@ -237,12 +284,21 @@ public class CharScanner {
 	    return biGray;
 	}
 	
+	/**
+	 * get the first 2 bytes of the color (which will stand for BLUE in RGB or grayscale in Grayscale (lel))
+	 * @param input
+	 * @return 0-255 color value
+	 */
 	private int getColorValue(int input) {
 		return (input>>0)&0xFF;
 	}
 	
 }
 
+/**
+ * This class is used internally in CharScanner
+ * it contains the information about positions of the found characters
+ */
 class CharData{
 	int[][] charCoords;
 	int charNum, wordNum;

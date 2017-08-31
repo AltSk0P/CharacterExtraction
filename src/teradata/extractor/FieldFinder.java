@@ -5,16 +5,22 @@ import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.io.IOException;
 
+/**
+ * This class is used to recognize signature points on a check and extract a field which should contain the characters to recognize
+ */
 public class FieldFinder {
 	
 	private int width, height;
 	
-	private static final int pointOneMinX = 207;
-	private static final int pointOneMaxX = 223;
-	private static final int pointOneMaxY = 260;
-	private static final int pointOneMinY = 60;
+	private int pointOneMinX = 203;
+	private int pointOneMaxX = 228;
+	private int pointOneMaxY = 294;
+	private int pointOneMinY = 128;
 	
-	private static final int pointTwoMinY = 40;
+	private int pointTwoMinY = 40;
+	
+	private static final int minWidth = 700;
+	private static final int minHeight = 50;
 	
 	private static final int[] NEIGHBOR_PRIORITY = {0,1,-1,2,-2};
 
@@ -22,7 +28,23 @@ public class FieldFinder {
 		
 	}
 	
-	public BufferedImage trimField(BufferedImage input) throws IOException {
+	/**
+	 * A public constructor which also allows overriding of the origin points
+	 * @param minx1
+	 * @param maxx1
+	 * @param miny1
+	 * @param maxy1
+	 * @param miny2
+	 */
+	public FieldFinder(int minx1, int maxx1, int miny1, int maxy1, int miny2) {
+		pointOneMinX = minx1;
+		pointOneMaxX = maxx1;
+		pointOneMinY = miny1;
+		pointOneMaxY = maxy1;
+		pointTwoMinY = miny2;
+	}
+	
+	public BufferedImage trimField(BufferedImage input) throws ExtractionException {
 		int[] image = turnBackground(imageToArray(input));
 		Point topLeft = findFieldStart(image);
 		Point botLeft = findLine(image,topLeft);
@@ -41,10 +63,19 @@ public class FieldFinder {
 		
 		System.out.println("x= "+x+" y="+y+" w="+w+" h="+h);
 		
+		if (w<minWidth || h<minHeight || Math.abs(botLeft.y-botRight.y)>14) {
+			throw new ExtractionException("Trimming error occured");
+		}
+		
 		return input.getSubimage(x, y, w, h);
 	}
 	
-	private Point findFieldStart(int[] image) {
+	/**
+	 * Find the rightmost-topmost pixel of the letter E on a check image
+	 * @param image
+	 * @return found Point
+	 */
+	private Point findFieldStart(int[] image) throws ExtractionException{
 		Point topLeft = new Point();
 		int color;
 		
@@ -52,27 +83,30 @@ public class FieldFinder {
         {
 			//System.out.println("We check at "+col+"x"+row);
             color = getColorValue(image[col+row*width]);
+            //System.out.println("Lookin at "+col+"x"+row);
             if (color!=255) {
-            		int next = neighbors(image,col,row);
-            		while (next>-3) {
+            		//System.out.println("2Lookin at "+col+"x"+row);
+            		int next = neighbors(image,col,row,1);
+            		while (next>-3 && col < width/2 && col>pointOneMinX) {
             			col++;
             			row += next;
-            			next = neighbors(image,col,row);
+            			next = neighbors(image,col,row,1);
             		}
+            		//System.out.println("3Lookin at "+col+"x"+row);
             		topLeft.x = col;
             		topLeft.y = row;
             		break;
             		}
-            else if (row==pointOneMaxY) {
+            else if (row==pointOneMaxY && col>pointOneMinX) {
             		row = pointOneMinY;
             		col--;
             }
             }
-		
+		System.out.println("topleft is "+topLeft.x+"x"+topLeft.y);
 		return topLeft;
 	}
 	
-	private Point findLine(int[] image, Point topLeft) throws IOException {
+	private Point findLine(int[] image, Point topLeft) throws ExtractionException {
 		Point botLeft = new Point();
 		int color;
 		int startPos = pointTwoMinY+topLeft.y;
@@ -87,41 +121,52 @@ public class FieldFinder {
             		break;
             		}
             else if (row==endPos) {
-            		//TODO throw an Exception
-            	throw new IOException("Couldn't locate the line");
+            	throw new ExtractionException("Couldn't locate the line");
             }
             }
 		return botLeft;
 	}
 	
-	private Point findLineEnd(int[] image, Point botLeft) {
+	private Point findLineEnd(int[] image, Point botLeft) throws ExtractionException {
 		int col = botLeft.x;
 		int row = botLeft.y;
-		int next = neighbors(image,col,row);
-		while(next > -3 && col < width) {
+		System.out.println(col+"x"+row);
+		int next = neighbors(image,col,row,6);
+		while(next > -3 && row > botLeft.y-30) {
 			col++;
 			row += next;
-			next = neighbors(image,col,row);
+			if (col < 1150) {
+				next = neighbors(image,col,row,6);
+			}
+			else {
+				next = neighbors(image,col,row,2);
+			}
 		}
 		Point botRight = new Point(col,row);
 		return botRight;
 	}
 	
-	private int neighbors(int[] image, int col, int row) {
+	private int neighbors(int[] image, int col, int row, int jump) throws ExtractionException{
 		int color;
-		//System.out.println(col+" , "+row);
+		try {
 		for (int i=0;i<NEIGHBOR_PRIORITY.length;i++)
 		{
-			int n = NEIGHBOR_PRIORITY[i];
-			color = getColorValue(image[col+1+(row+n)*width]);
-			if (color!=255) {
-	            return n;
+			for(int m=1;m<=jump;m++) {
+				int n = NEIGHBOR_PRIORITY[i];
+				color = getColorValue(image[col+m+(row+n)*width]);
+				if (color!=255) {
+		            return n;
+				}
 			}
 		}
 		return -3;
+		}
+		catch (ArrayIndexOutOfBoundsException e) {
+			throw new ExtractionException("Trimming error");
+		}
 	}
 	
-	private int[] imageToArray(BufferedImage image) throws IOException {
+	private int[] imageToArray(BufferedImage image) throws ExtractionException {
 
 		
 		if (image.getType() == BufferedImage.TYPE_BYTE_GRAY) {
@@ -135,7 +180,7 @@ public class FieldFinder {
 	      height = image.getHeight();
 	      
 	      if(!(height==720&width==1636)) {
-	    	  throw new IOException("The image isn't of the right size");
+	    	  throw new ExtractionException("The image isn't of the right size");
 	      }
 	      
 	      final byte[] pixels = ((DataBufferByte) image.getRaster().getDataBuffer()).getData(); 
